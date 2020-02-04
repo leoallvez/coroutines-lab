@@ -3,9 +3,16 @@ package com.devtides.androidcoroutinesretrofit.viewmodel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.devtides.androidcoroutinesretrofit.model.Country
-import retrofit2.HttpException
+import com.devtides.androidcoroutinesretrofit.model.CountriesService
+import kotlinx.coroutines.*
 
 class ListViewModel: ViewModel() {
+
+    private val countryService = CountriesService.getCountriesService()
+    private val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
+        onError("Exception: ${throwable.localizedMessage}}")
+    }
+    var job: Job? = null
 
     val countries = MutableLiveData<List<Country>>()
     val countryLoadError = MutableLiveData<String?>()
@@ -17,22 +24,24 @@ class ListViewModel: ViewModel() {
 
     private fun fetchCountries() {
         loading.value = true
-
-        val dummyData = generateDummyCountries()
-
-        countries.value = dummyData
-        countryLoadError.value = ""
-        loading.value = false
+        job = CoroutineScope(Dispatchers.IO + exceptionHandler).launch {
+            val response = countryService.getCountries()
+            //update UI
+            withContext(Dispatchers.Main) {
+                when(response.isSuccessful) {
+                    true -> onSuccess(response.body())
+                    else -> onError("Error: ${response.message()}")
+                }
+            }
+        }
     }
 
-    private fun generateDummyCountries(): List<Country> {
-        val countries = arrayListOf<Country>()
-        countries.add(Country("dummyCountry1",  "dummyCapital1",""))
-        countries.add(Country("dummyCountry2",  "dummyCapital2",""))
-        countries.add(Country("dummyCountry3",  "dummyCapital3",""))
-        countries.add(Country("dummyCountry4",  "dummyCapital4",""))
-        countries.add(Country("dummyCountry5",  "dummyCapital5",""))
-        return countries
+    private fun onSuccess(countryList: List<Country>?) {
+        countryList?.let {
+            countries.value = countryList
+        }
+        countryLoadError.value = ""
+        loading.value = false
     }
 
     private fun onError(message: String) {
@@ -40,4 +49,8 @@ class ListViewModel: ViewModel() {
         loading.value = false
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        job?.cancel()
+    }
 }
