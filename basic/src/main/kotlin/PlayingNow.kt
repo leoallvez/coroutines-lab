@@ -1,30 +1,32 @@
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 
+const val interval: Long = 5 * 1000L
 object PlayingNow {
-    var song: Flow<People> = flow {}
-    var isUpdated: Boolean = false
-}
 
-data class People(val name: String,val age: Int)
+    var song = Channel<String>()
+        private set
+
+    suspend fun sendSong(value: String, interval: Long = 10 * 1000L) {
+        println("sent....: $value")
+        song.send(value)
+        delay(interval)
+    }
+}
 
 fun main() {
     runBlocking {
-        withContext(Dispatchers.IO) {
-            PlayingNow.song = flow {
-                val people = People("Maria da Silva", 33)
-                emit(people)
+        launch {
+            var count = 0
+            while (true) {
+                PlayingNow.sendSong((count++).toString(), interval)
             }
         }
-    }
 
-    runBlocking {
-        withContext(Dispatchers.Default) {
-            PlayingNow.song.collect { people -> println(people) }
+        launch {
+            for (song in PlayingNow.song) {
+                println("received: $song")
+            }
         }
     }
 }
